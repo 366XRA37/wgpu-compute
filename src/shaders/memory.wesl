@@ -38,57 +38,125 @@ fn storeRegister(lane: u32, index: u32, value: u32) {
     registers[index * WORKGROUP_SIZE + lane] = value;
 }
 
-fn load4(tensor: u32, index: u32) -> u32 {
-    let word = load32(tensor, index >> 3u);
+fn load4(lane: u32, reg: u32, tensor: u32, index: u32) {
+    let word = loadTensor32(tensor, index >> 3u);
     let shift = (index & 7u) << 2u;
-    return (word >> shift) & 0xFu;
+    storeRegister(lane, reg, (word >> shift) & 0xFu);
 }
 
-fn load8(tensor: u32, index: u32) -> u32 {
-    let word = load32(tensor, index >> 2u);
+fn load8(lane: u32, reg: u32, tensor: u32, index: u32) {
+    let word = loadTensor32(tensor, index >> 2u);
     let shift = (index & 3u) << 3u;
-    return (word >> shift) & 0xFFu;
+    storeRegister(lane, reg, (word >> shift) & 0xFFu);
 }
 
-fn load16(tensor: u32, index: u32) -> u32 {
-    let word = load32(tensor, index >> 1u);
+fn load16(lane: u32, reg: u32, tensor: u32, index: u32) {
+    let word = loadTensor32(tensor, index >> 1u);
     let shift = (index & 1u) << 4u;
-    return (word >> shift) & 0xFFFFu;
+    storeRegister(lane, reg, (word >> shift) & 0xFFFFu);
 }
 
-fn load32(tensor: u32, index: u32) -> u32 {
+fn load32(lane: u32, reg: u32, tensor: u32, index: u32) {
+    let word = loadTensor32(tensor, index);
+    storeRegister(lane, reg, word);
+}
+
+// All invocations in the workgroup must call this function in
+// uniform control flow, with lanes aligned to index (the three
+// least significant bits must match). Additionally, lanes form
+// groups based on the ID (lane & ~7u). Those groups must be
+// complete, use the same register and tensor, and write adjacent
+// indices in order. Different groups must write distinct memory words.
+
+fn store4(lane: u32, reg: u32, tensor: u32, index: u32) {
+    workgroupBarrier();
+    if (!bool(lane & 7u)) {
+        var word = 0u;
+        for (var i = 0u; i < 8u; i++) {
+            let value = loadRegister(lane + i, reg) & 0xFu;
+            word |= value << (i << 2u);
+        }
+        storeTensor32(tensor, index >> 3u, word);
+    }
+    workgroupBarrier();
+}
+
+// All invocations in the workgroup must call this function in
+// uniform control flow, with lanes aligned to index (the two
+// least significant bits must match). Additionally, lanes form
+// groups based on the ID (lane & ~3u). Those groups must be
+// complete, use the same register and tensor, and write adjacent
+// indices in order. Different groups must write distinct memory words.
+
+fn store8(lane: u32, reg: u32, tensor: u32, index: u32) {
+    workgroupBarrier();
+    if (!bool(lane & 3u)) {
+        var word = 0u;
+        for (var i = 0u; i < 4u; i++) {
+            let value = loadRegister(lane + i, reg) & 0xFFu;
+            word |= value << (i << 3u);
+        }
+        storeTensor32(tensor, index >> 2u, word);
+    }
+    workgroupBarrier();
+}
+
+// All invocations in the workgroup must call this function in
+// uniform control flow, with lanes aligned to index (the least
+// significant bit must match). Additionally, lanes form groups
+// based on the ID (lane & ~1u). Those groups must be complete,
+// use the same register and tensor, and write adjacent indices
+// in order. Different groups must write distinct memory words.
+
+fn store16(lane: u32, reg: u32, tensor: u32, index: u32) {
+    workgroupBarrier();
+    if (!bool(lane & 1u)) {
+        let lo = loadRegister(lane, reg) & 0xFFFFu;
+        let hi = loadRegister(lane + 1u, reg) & 0xFFFFu;
+        let word = lo | (hi << 16u);
+        storeTensor32(tensor, index >> 1u, word);
+    }
+    workgroupBarrier();
+}
+
+fn store32(lane: u32, reg: u32, tensor: u32, index: u32) {
+    let word = loadRegister(lane, reg);
+    storeTensor32(tensor, index, word);
+}
+
+fn loadTensor32(tensor: u32, index: u32) -> u32 {
     var pageIndex = tensor;
     var elementIndex = index;
 
     if (bool(pageIndex >> 31u)) {
         let pageOffset = index >> 16u;
         elementIndex = index & 0xFFFFu;
-        pageIndex = loadPhysical32(
+        pageIndex = loadPage32(
             pageIndex & 0x7FFFFFFFu,
             pageOffset
         );
     }
 
-    return loadPhysical32(pageIndex, elementIndex);
+    return loadPage32(pageIndex, elementIndex);
 }
 
-fn store32(tensor: u32, index: u32, value: u32) {
+fn storeTensor32(tensor: u32, index: u32, value: u32) {
     var pageIndex = tensor;
     var elementIndex = index;
 
     if (bool(pageIndex >> 31u)) {
         let pageOffset = index >> 16u;
         elementIndex = index & 0xFFFFu;
-        pageIndex = loadPhysical32(
+        pageIndex = loadPage32(
             pageIndex & 0x7FFFFFFFu,
             pageOffset
         );
     }
 
-    storePhysical32(pageIndex, elementIndex, value);
+    storePage32(pageIndex, elementIndex, value);
 }
 
-fn storePhysical32(page: u32, index: u32, value: u32) {
+fn storePage32(page: u32, index: u32, value: u32) {
     let elementIndex = ((page & 0xFFFFu) << 16u) + index; 
     let poolIndex = page >> 16u;
 
@@ -101,7 +169,7 @@ fn storePhysical32(page: u32, index: u32, value: u32) {
     }
 }
 
-fn loadPhysical32(page: u32, index: u32) -> u32 {
+fn loadPage32(page: u32, index: u32) -> u32 {
     let elementIndex = ((page & 0xFFFFu) << 16u) + index; 
     let poolIndex = page >> 16u;
 

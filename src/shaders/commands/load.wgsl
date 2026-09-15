@@ -11,7 +11,7 @@ import package::memory::{
     storeRegister
 };
 
-fn cmd_load(lane: u32, ip: ptr<function, u32>, position: u32) {
+fn cmdLoad(lane: u32, ip: ptr<function, u32>, position: u32) {
     let command = currentU32(ip);
     let reg = (command >> 8u) & 0xFFu;
     let bits = (command >> 16u) & 0xFFu;

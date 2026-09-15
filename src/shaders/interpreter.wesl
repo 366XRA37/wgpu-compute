@@ -1,4 +1,4 @@
-import package::commands::load::cmd_load;
+import package::commands::load::cmdLoad;
 
 // Programs have to be stored in an immutable buffer because
 // otherwise control flow which depends on the value of
@@ -25,7 +25,7 @@ fn launch(lane: u32, offset: u32, position: u32) {
     
     loop {
         switch (nextU32(&ip) & 0xFFu) {
-            case CMD_LOAD: { cmd_load(lane, &ip, position); }
+            case CMD_LOAD: { cmdLoad(lane, &ip, position); }
             case CMD_EXIT, default: { return; } 
         }
     } 
