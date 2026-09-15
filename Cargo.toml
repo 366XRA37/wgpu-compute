@@ -1,0 +1,10 @@
+[package]
+name = "wgpu-compute"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[build-dependencies]
+naga = { version = "30.0.1", features = ["wgsl-in"] }
+wesl = { version = "0.5.0", features = ["naga-ext"] }
