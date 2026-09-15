@@ -5,7 +5,7 @@ import package::commands::store::cmdStore;
 // otherwise control flow which depends on the value of
 // instructions would not be considered uniform by WGSL.
 
-@group(1) @binding(0)
+@group(1) @binding(3)
 var<storage, read> instructions: array<u32>;
 
 // This function is the virtual machine entry point. The 'lane'

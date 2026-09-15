@@ -1,4 +1,5 @@
 import package::interpreter::launch;
+import package::mainloops::matmul::taskMatmul;
 
 override WORKGROUP_SIZE: u32;
 override REGISTER_COUNT: u32;
@@ -11,8 +12,15 @@ override REGISTER_COUNT: u32;
 // the cpu side and therefore arrayLength won't always just
 // contain one wave.
 
-@group(1) @binding(1)
+@group(1) @binding(0)
 var<storage, read> taskRanges: array<Range>;
+@group(1) @binding(1)
+var<storage, read> taskOffsets: array<u32>;
+@group(1) @binding(2)
+var<storage, read> tasks: array<u32>;
+
+const TASK_EXIT: u32 = 0u;
+const TASK_MATMUL: u32 = 1u;
 
 struct Range {
     min: u32,
@@ -27,30 +35,60 @@ struct Builtin {
 
 @compute @workgroup_size(WORKGROUP_SIZE)
 fn main(builtin: Builtin) {
-    var workgroupIndex = builtin.workgroupId.x +
+    let lane = builtin.lane;
+    var group = builtin.workgroupId.x +
     builtin.numWorkgroups.x * (
         builtin.workgroupId.y +
         builtin.numWorkgroups.y *
         builtin.workgroupId.z
     );
     
-    let taskIndex = taskIndex(&workgroupIndex);
-    launch(builtin.lane, 0u, builtin.lane); 
+    let taskIndex = searchTaskIndex(&group);
+    if (taskIndex == 0u) { return; } 
+    var tp = taskOffsets[taskIndex - 1u];
+
+    switch (nextU32(&tp)) {
+        case TASK_MATMUL: { taskMatmul(group, lane, &tp); }
+        default: {
+            return;
+        }
+    }
 }
 
-fn taskIndex(workgroupIndex: ptr<function, u32>) -> u32 {
-    var max = taskRanges[0].max + 1;
+// Returns a 1-based task index, or 0 if no task owns this
+// workgroup. For a valid task, converts workgroupIndex to the
+// task-local index.
+fn searchTaskIndex(group: ptr<function, u32>) -> u32 {
+    let taskCount = taskRanges[0].max;
+    if (taskCount == 0u) { return 0u; }
+
+    var max = taskCount + 1u;
     var min = 1u;
     
     while (min + 1u < max) {
         let mid = min + ((max - min) >> 1u);
-        if (taskRanges[mid].min <= * workgroupIndex) {
+        if (taskRanges[mid].min <= * group) {
             min = mid;  
         } else {
             max = mid;
         }
     }
 
-    *workgroupIndex -= taskRanges[min].min;
+    let range = taskRanges[min];
+    if ((*group < range.min) || (*group >= range.max)) {
+        return 0u;
+    }
+
+    *group -= range.min;
     return min;
+}
+
+fn currentU32(tp: ptr<function, u32>) -> u32 {
+    return tasks[*tp - 1u];
+}
+
+fn nextU32(tp: ptr<function, u32>) -> u32 {
+    let value = tasks[*tp];
+    *tp += 1;
+    return value;
 }
