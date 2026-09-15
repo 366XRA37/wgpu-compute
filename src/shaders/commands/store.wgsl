@@ -4,34 +4,33 @@ import package::interpreter::{
 };
 
 import package::memory::{
-    load4,
-    load8,
-    load16,
-    load32,
-    storeRegister
+    store4,
+    store8,
+    store16,
+    store32,
 };
 
-fn cmdLoad(lane: u32, ip: ptr<function, u32>, position: u32) {
+fn cmdStore(lane: u32, ip: ptr<function, u32>, position: u32) {
     let command = currentU32(ip);
     let reg = (command >> 8u) & 0xFFu;
     let bits = (command >> 16u) & 0xFFu;
     let tensor = nextU32(ip);
 
     switch (bits) {
-        case 4: {
-            load4(lane, reg, tensor, position); 
+        case 4: {            
+            store4(lane, reg, tensor, position); 
         }
         case 8: {
-            load8(lane, reg, tensor, position); 
+            store8(lane, reg, tensor, position); 
         }
         case 16: {
-            load16(lane, reg, tensor, position); 
+            store16(lane, reg, tensor, position); 
         }
         case 32: {
-            load32(lane, reg, tensor, position); 
+            store32(lane, reg, tensor, position); 
         }
         default: {
-            storeRegister(lane, reg, 0u);
+            return;
         }
     }
 }

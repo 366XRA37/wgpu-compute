@@ -1,4 +1,5 @@
 import package::commands::load::cmdLoad;
+import package::commands::store::cmdStore;
 
 // Programs have to be stored in an immutable buffer because
 // otherwise control flow which depends on the value of
@@ -19,12 +20,14 @@ var<storage, read> instructions: array<u32>;
 
 const CMD_EXIT: u32 = 0u;
 const CMD_LOAD: u32 = 1u;
+const CMD_STORE: u32 = 2u;
 
 fn launch(lane: u32, offset: u32, position: u32) {
     var ip = offset;
     
     loop {
         switch (nextU32(&ip) & 0xFFu) {
+            case CMD_STORE: { cmdStore(lane, &ip, position); }
             case CMD_LOAD: { cmdLoad(lane, &ip, position); }
             case CMD_EXIT, default: { return; } 
         }

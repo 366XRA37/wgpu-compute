@@ -2,12 +2,12 @@ use naga::valid::{Capabilities, ValidationFlags, Validator};
 use wesl::Compiler;
 
 fn main() {
+    println!("cargo::rerun-if-changed=src/shaders");
+
     let compiler = Compiler::default();
     let compile_result = compiler
         .compile_module("src/shaders", &"package::main".parse().unwrap())
         .unwrap_or_else(|e| panic!("{e}"));
-
-    compile_result.emit_rerun_if_changed();
 
     let wgsl = compile_result.to_string();
     let module = naga::front::wgsl::parse_str(&wgsl)
